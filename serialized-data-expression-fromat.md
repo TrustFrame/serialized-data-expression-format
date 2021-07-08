@@ -1,9 +1,9 @@
 # Serialized Data Expression Format
-Version: v0.0.2 Pre-Draft
-Date: July 7, 2021
-License: CC BY 4.0
-Author: Dave Huseby <dwh@trustframe.com>
-Copyright: (c) TrustFrame, Inc. 2021
+Version: v0.0.3 Pre-Draft  
+Date: July 7, 2021  
+License: CC BY 4.0  
+Author: Dave Huseby <dwh@trustframe.com>  
+Copyright: (c) TrustFrame, Inc. 2021  
 
 ## Data Expressions
 
@@ -147,7 +147,7 @@ By convention, top-level or first-order objects are named with camel case names.
 To canonicalize any SDEF encoded object, the only thing we need to worry about is normalizing whitespace. The rules for normalizing whitespace are simple. We need to preserve one space between expression parameters unless they are themselves an s-expression. The following is also a valid serialization of the `Person` object above:
 
 ```sexp=
-(' http://foo.se/person.sdef)(Person (emails joe@schmoe.com joe@foo.com)(phones 9119119111 8005551212))
+(' http://trustframe.com/sdef/person.sdef)(Person (emails joe@schmoe.com joe@foo.com)(phones 9119119111 8005551212))
 ```
 
 Note that there is no space between s-expressions but there is a space between the email addresses and the phone numbers. Technically the space between an expression type identifier and the expression parameters is not necessary but we add one for readability. The only exception is if the regex for a given type parameter is a non-matching group such as the definition for comments. The regex is non-matching so we don't put a space after `("` which also increases readability. 
@@ -206,5 +206,5 @@ To further simplify and standardize the use of SDEF, a set of standard basic typ
 ```
 
 ## Change Log
-v0.0.1, July 21, 2019 -- Initial version specifying a strict ordering, text based, self-describing data structure serialization format for data that is intended to be digitally signed.
-v0.0.2, July 7, 2020 -- Some small fixes with the addition of mentions to the Universal Cryptographic Construct encoding method for including binary cryptographic data.
+* v0.0.1, July 21, 2019 -- Initial version specifying a strict ordering, text based, self-describing data structure serialization format for data that is intended to be digitally signed.
+* v0.0.2, July 7, 2020 -- Some small fixes with the addition of mentions to the Universal Cryptographic Construct encoding method for including binary cryptographic data.
