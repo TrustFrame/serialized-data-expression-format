@@ -1,22 +1,27 @@
 # Serialized Data Expression Format
+Version: v0.0.2 Pre-Draft
+Date: July 7, 2021
+License: CC BY 4.0
+Author: Dave Huseby <dwh@trustframe.com>
+Copyright: (c) TrustFrame, Inc. 2021
 
 ## Data Expressions
 
-There are only two forms that these expressions may take: regular and type-define. The regular form is an expression surrounded by parenthesis:
+There are only two forms that these expressions may take: regular and type-define. The regular form is an s-expression:
 
+```sexp=
+(<label> <data>)
 ```
-(<type name> <type parameters>)
-```
 
-Expressions of this form are serialized data. The type for the data is specified by the type name and the type parameters are the data for each part of the type.
+Expressions of this form are serialized data and the regular form is recursive in that the data may be one or more s-expressions.
 
-The type-define form is for defining concrete types. The type-define form starts with a left parenthesis and a single quote followed by a string, a space, and one or more s-expressions or a single regex string. It ends with a right parenthesis: 
+The type-define form is for defining concrete types of structured data. The type-define form starts with a left parenthesis and a single quote followed by a string, a space, and one or more s-expressions or a single regex string defining the structure of the data. It ends with a right parenthesis: 
 
-```
+```sexp=
 ('<type name> <s-expr>+|<regex>)
 ```
 
-When defining the new type with `('` the value for the type can either be a single regular expression or it can be one or more s-expressions that bind types to named members of the type. This is all that is needed to define data types and how they are parsed.
+When defining the new type with `('` the data for the type can either be a single regular expression or it can be one or more s-expressions that bind types to named members of the type. This is all that is needed to define arbitrary data structures as well as how they are parsed from text.
 
 Each type definition gets added to the global list of types as aliases for the regular expression in the type regex. The type regex may reference other, previously defined types so that the regex is built up recursively.
 
@@ -24,12 +29,12 @@ Type definitions and regular data expressions can be in the same file. The only 
 
 ## Extensibility
 
-To make this fully extensible, the only other special form needed is an expression to include other files at parsing time. To accomplish that, a special type-define expression with no type name is used to mean "include and process the following files". These are called "include expressions". An include expression defines one or more URI's that refer to files that should be parsed and processed at the point of the include expression. This allows for reuse of type definitions and to also include data from other files.
+To make SDEF fully extensible, the only other special form needed is an expression to include other files at parsing time. This is accomplished with a special "include expression" that is a type-define expression with no type name that names the location of an SDEF file to include and process. An include expression defines one or more URL's for files to parse and process at the point of the include expression. This allows for reuse of type definitions and to also include data from other files.
 
-As an example, I may extend my own local type definitions with the standard one for comments like so:
+As an example, I may extend my own local type definitions with a standard one for comments like so:
 
-```
-(' https://w3c.org/sdef/comment.sdef)
+```sexp=
+(' https://trustframe.com/sdef/comment.sdef)
 
 ("A single hexidecimal character")
 ('hex_char [0-9a-fA-F])
@@ -43,16 +48,18 @@ As an example, I may extend my own local type definitions with the standard one 
 
 The `('` include tells the parser to download and process the `comment.sdef` file before proceeding. The `comment.sdef` file defines just the comment type. By including the comment type definition, my local type definition file can have comments in it anywhere. For the record, the definition of a comment type is:
 
-```
+```sexp=
 ('" (?:[^"]*)(?:\"))
 ```
 
 This says that any expression starting with the double quotation mark `"` should match all characters that are not a double quotation mark--including newlines--and then match an ending double quotation mark. They are defined as non-matching groups in the regex because we want to ignore the data in a comment. The result of processing any comment is "nil", or void, which causes the parser to ignore it. Thus comments can be placed anywhere in a serialized data file.
 
-If the type definitions for hexchar and KeyHex are in the file named `keyhex.sdef` stored at `http://foo.se/` then an example of serialized data that defines a Keys list of KeyHex objects looks like the following:
+Another point that the comment type brings up is that type labels are matched using a greeding matching against the list of type labels known to the parser. This is so that there is no requirement for a space between the label and the data in a data expression. This allows comment data expressions to be of the form `("this is a comment")`. If there are two types with the labels "A" and "Ab", then a data expression such as `(About)` is matched with the type "Ab" and the remainder of the data will be checked against the regular expression from the "Ab" type definition.
 
-```
-(' http://foo.se/keyhex.sdef)
+If the type definitions for hexchar and KeyHex are in the file named `keyhex.sdef` stored at `http://trustframe.com/sdef` then an example of serialized data that defines a Keys list of KeyHex objects looks like the following:
+
+```sexp=
+(' http://trustframe.com/sdef/keyhex.sdef)
 
 ("My public keys")
 (Keys
@@ -65,8 +72,8 @@ If the type definitions for hexchar and KeyHex are in the file named `keyhex.sde
 
 Defining complex data types is as simple as nesting named expressions under a newly defined type. Let's assume I want to define a Person type that includes one or more email addresses and one or more phone numbers. First I have to define the email and phone number types:
 
-```
-(' http://w3c.org/sdef/comment.sdef)
+```sexp=
+(' http://trustframe.com/sdef/comment.sdef)
 
 ("An email requires a crazy regex")
 ('email (?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\]))
@@ -78,7 +85,7 @@ Defining complex data types is as simple as nesting named expressions under a ne
 Assume that the phone and email types are stored in a file called `pfields.sdef`. Then the definition of a `Person` type could look like:
 
 ```
-(' http://foo.se/pfields.sdef)
+(' http://trustframe.com/sdef/pfields.sdef)
 
 ("A person has one or more emails followed by one or more phones")
 ('Person
@@ -103,12 +110,12 @@ With an example of a serialized Person object looks like this:
 )
 ```
 
-It is important to note a few things about the definition of complex data objects. First of all in the `('Person` defition, instead of giving a regex directly, the definition includes two s-expressions that bind names to types. This is how named fields of a type are defined. So in the case above, each `Person` has two fields, one named `emails` and the other named `phones`. Furthermore, `emails` is defined as a list of one or more `email` type data units and `phones` is defined as a list of one or more `phone` type data units.
+It is important to note a few things about the definition of complex data objects. First of all in the `('Person` definition, instead of giving a regex directly, the definition includes two s-expressions that bind names to types. This is how named fields of a type are defined. So in the case above, each `Person` has two fields, one named `emails` and the other named `phones`. Furthermore, `emails` is defined as a list of one or more `email` typed data and `phones` is defined as a list of one or more `phone` typed data.
 
-When defining lists of objects, the data type for each object can be inferred from the type definition and do not require explicit definition. It is important to note that all data units in a list are of the same type to simplify parsing. The follow is also a valid encoding of the above `Person` object but is pedantic and not necessary:
+When defining a type as a list of another named type, the data type for each member of the list is inferred from the type definition and does not require explicit usage in data. It is important to note that all data units in a list are of the same type to simplify parsing. The follow is also a valid encoding of the above `Person` object but is pedantic and not necessary:
 
-```
-(' http://foo.se/person.sdef)
+```sexp=
+(' http://trustframe.com/sdef/person.sdef)
 (Person
     (emails
         (email joe@schmoe.com)
@@ -127,9 +134,9 @@ The explicit encoding of each email and phone number object is unnecessary becau
 
 One other aspect of the type definition process is that the order of the fields is significant. Unlike JSON, the field ordering in the type definitions elliminates the need for an externally defined and arbitrary canonicalization algorithm. All `Person` objects have a list of `emails` and then a list of `phones`.
 
-If you defined another type, say `AntiPerson` that had a list of `phones` before a list of `emails`, the two types would be considered distinct and different because the order of their fields are different.
+If you defined another type, say `AntiPerson` that had a list of `phones` before a list of `emails`, the two types are considered distinct because the order of their fields is different.
 
-This design detail is important to facilitate automated parser generation and completes the self-describing attribute of this encoding scheme.
+This design detail is important because SDEF must have a single, trivial way to canonicalize an SDEF file before creating or verifying a digital signature. It also enables automated parser generation and completes the self-describing attribute of this encoding scheme.
 
 #### Type Names
 
@@ -139,7 +146,7 @@ By convention, top-level or first-order objects are named with camel case names.
 
 To canonicalize any SDEF encoded object, the only thing we need to worry about is normalizing whitespace. The rules for normalizing whitespace are simple. We need to preserve one space between expression parameters unless they are themselves an s-expression. The following is also a valid serialization of the `Person` object above:
 
-```
+```sexp=
 (' http://foo.se/person.sdef)(Person (emails joe@schmoe.com joe@foo.com)(phones 9119119111 8005551212))
 ```
 
@@ -149,206 +156,38 @@ The above normalized and serialized form of the Person object is used when sendi
 
 ## Digital Signatures
 
-One feature that many serialization formats need to tackle is how to include digital signatures over data. JSON has to use a combination of application-specific rules (e.g. signature is included last--see Secure ScuttleButt format) plus a complicated canonicalization algorithm to get JSON objects into some normalized form for the digital signature creation and verification to work. 
+One feature that many serialization formats need to tackle is how to include digital signatures over data. JSON has to use a combination of application-specific rules (e.g. signature is included last--see Secure ScuttleButt format) plus a complicated canonicalization algorithm to get JSON objects into some normalized form for the digital signature creation and verification to work. The unconstrained field ordering in JSON is a perpetual problem for canonicalizing JSON files for cryptrographic operations.
 
 With data in serialized data expression format (SDEF), signatures are just another data type and included somewhere in a data object. By convention they should probably always be last in an object just to make both creating and verifying digital signatures easier for implementors.
 
-Any digital signature needs four things:
+If the [CDE](https://hackmd.io/@dhuseby/BkG-4gp2u) encoding format is chosen for encoded cryptographic constructs, such as keys and signatures, the task of defining keys and signatures for inclusion into SDEF data is trivial.
 
-0. A standardized name for the signature algorithm used. This defines the type of public key to expect and which digest and encryption algorithm was used to create the digital signature.
-1. A public key to validate the signature with. This can either be an inline key or a reference to a key somewhere else.
-2. The data object that is signed.
-3. The value of the digital signature.
+First of all, a digitally signed object is some data followed immediately by its signature. Let us define a "Signed" type that is either a digitally signed email or a digitally signed phone number.
 
-First of all, you would think we would need to define a list of signature formats like so:
-
-```
-('SignatureFormat Ed25519Signature2019|RsaSignature2019)
+```sexp=
+("A digitally signed email or phone number")
+('Signed email|phone signature)
 ```
 
-However since there will only be one of these values in each of the types of signature objects, it makes more sense to specify the signature format when we define the signature types.
+This relies on the email and phone types defined in previous examples. It also uses a new type called "signature". In the CDE encoding standard, all digital signatures begin with either a lower-case or upper-case letter S. Further more, all CDE encoded data is encoded using the ASCII characters a-z, A-Z, 0-9, hyphen (`-`) and underscore (`_`). The definition of the signature type is therefore trivial:
 
-Next let's define what a Key and KeyRef look like:
-
-```
-('hex [0-1a-fA-F])
-('Ed25519Key hex{128})
-('RsaKey4096 hex{1024})
-('Key Ed25519Key|RsaKey4096)
-('uri \w+:(\/?\/?)[^\s]+)
-('KeyRef uri)
+```sexp=
+("A CDE format digital signature")
+('signature [sS][a-zA-Z0-9-_]+)
 ```
 
-Lastly, let's bring it all together into one SDEF file that defines what a digital signature looks like:
+It is just a lower or upper-case letter S followed by one or more of the CDE encoding characters. This works because CDE formatted digital signatures are self-describing and the algorithm used is encoded along with the signature.
 
+Because of the way CDE works, implementors can limit the kinds of digital signatures to one or more specific algorithms. For instance, all standard Ed25519 digital signatures being with "se" and all OpenPGP digital signatures begin with "sp" so to limit valid signatures to those types, just define the regex for a signature to start with either of those:
+
+```sexp=
+("Either an OpenPGP or Ed25519 signature")
+('signature s[ep][a-zA-Z0-9-_]+)
 ```
-(' http://w3c.org/sdef/comment.sdef)
-
-("Define basic value types:")
-    ('hex [0-1a-fA-F])
-    ('uri \w+:(\/?\/?)[^\s]+)
-
-("Define the primitive types:")
-    ('Ed25519Key hex{128})
-    ('RsaKey4096 hex{1024})
-    ('Key Ed25519Key|RsaKey4096)
-    ('KeyRef uri)
-    
-    ("Ed25519Sigs are 128 bytes in length.")
-    ('Ed25519Sig hex{128})
-    
-    ("PKCS#1 says the sigs are the same size as the modulus")
-    ('RsaSig4096 hex{1024})
-
-("Define the two different types of signatures:")
-    ('Ed25519Signature
-        (type Ed25519Signature2019)
-        (key Ed25519Key)
-        (sig Ed25519Sig)
-    )
-    ('RsaSignature
-        (type RsaSignature2019)
-        (key RsaKey4096)
-        (sig RsaSig4096)
-    )
-    
-("Define a generic signature:")
-    ('Signature Ed25519Signature|RsaSignature)
-```
-
-Now if we take our example of a `Person` from above and add a signature to it the following is the result (**NOTE:** the hex values are random, invalid values used just as an example):
-
-```
-(' pfields.sdef signature.sdef)
-
-("Re-define Person as having a signature")
-('Person
-    (emails email+)
-    (phones phone+)
-    (signature Signature)
-)
-
-(Person
-    (emails
-        joe@schmoe.com
-        joe@foo.com
-    )
-    (phones
-        9119119111
-        8005551212
-    )
-    (signature
-        (type Ed25519Signature2019)
-        (key 454617014478c93a6b319dfc7f9353d9bcd46c5d031d2e2be3339170971a09c31a87a6fa65a9663c4192fe74ccb88a51bb1b2251d7041a858512f970bf1230d2)
-        (sig 1a87a6fa65a9663c4192fe74ccb88a51bb1b2251d7041a858512f970bf1230d2454617014478c93a6b319dfc7f9353d9bcd46c5d031d2e2be3339170971a09c3)
-    )
-)
-
-(Person
-    (emails
-        jane@doe.com
-        jane@bar.com
-    )
-    (phones
-        2112112111
-    )
-    (signature
-        (type RsaSignature2019)
-        (key 621cfb78c12a99a6528cae2fdab472236234ef1a6df7d14e9783ade7f171d11665363d420bf25d37b5a82df816aa2a2db228e896805c2869d94bd7fb3271899dbdf697cf476d61fcf76d1932792f6bdaf6f94234596891b43da0840eda739bcc72bfe5b012b732c4dd2f7eece64f6f8c13f9c0871670e9b6706251895a8e504f12b8b010c4854ea8fce46facc59aa95472d21580ca63d774ce4e5107c50b6258740d7f84456b40b0adf4f8ef8e17e885c77a85052f5b7581a92e5d7779e8018392697f02dfb5e5ad7732b36cae8f0c0a21c65f277644a72929064c59935fe48e68d6141ef8f0cfd85e9ed1908e3e340310b39cbf229eeab1518f2ace406372c5f55c5fc205c3c37356ae56861fcf28d1bb19e44fa39bf27ebe58f56141c96a30f4cc05f7dea3d4ca99fca20195b47117a36722675d2940fac8ea58fd9f75a8705932ae4ffca3c70c418a15dd9fa2701805cbabff79b2a0bd78c8a802784cd2a2971e52e1b9d63e6fddbeb459771b3c8fb3504a1da64f55a66ba6be010e8c00d0505b92c9717616eedfddb4a2cb18c4eff0917e8f56e67a0de47711db5faea611e8f9df11a418fc54af7c022dcf707e6933dbc3db40414881a843192a8bc9a3115cc930310f402dd3602dbc9c473cb5dfbfa8d47da86360488e86a87adfd02639b64ecc0f64c55d251465a41b59378407e4d8d3d284124b27a634fa42221d8d3f)
-        (sig edce3a83d8b04868dce12303ff0149c8037fa20ad10f628d9801eb05216556a6162162e7a0e2a37b3c4d987683027b02b5391b547cc07a6f743637a42816d0da21dd96e4b75ca89f6073df3a2570b19b35d6bdf32d42f97b2b126e6a3cf4ab3469ab319c0b2dca492e3d774d38d344f284e311f0fc107be84cd400c5ff9b906824219585f5e47049167d87968f5df17fe25b2cdc322fba06bb40e0cee0e3d8154d368814c478f9dde1fd3cb32cebd925646aad52954176bf3407809a42071918b11da802564b202638334a5cbadbf344b0a2c0e559844e536a58cb573dac3c5ab79f1278dba67ed290d02306f64eee35227a1f8a76ffcd30df304c0067992326f6122efb54150d87e1235a26e9f052f4554bfa2eefb4f9d0b088ad2bfb2b8d45f0008fa4053e64bff781470062ed3f6750ea0f25a476916d8d2d99ce5c796966bbbc3f23b89f92fad520f9aa4ea325dd2bed2e387dce0c6adc320afae4ba1e8d22bc5a4ec78a269927fb3cad8ff27cd623b6494724fd2887e922c153c52a81eb0fcd33ae9f4fd9e92d08999214bd153584ffac0bed1f235d282c607d9debc3a9d33151d9c4c678147ca2f19124b1e6a69c5d66535231f157620b85dd0ec7ede392aaa846cfe7defbcebace7de5e788f1787dd5513ddb6d27acdf5e4ed5934524f1f9e6d9695eeb2d618cbf8ce2e185cc235696c3e3539305fa53fc5f9b4dd4a6)
-    )
-)
-```
-
-The above example shows a way for having inline signatures in data objects however it probably makes more sense to define a new object called `SignedPerson` that contains both the `Person` object and the `Signature` for the object. This actually makes creating and validating digital signatures much easier for implementors. Here's how things change:
-
-```
-(' http://w3c.org/sdef/comment.sdef)
-
-("Define basic value types:")
-    ('hex [0-1a-fA-F])
-    ('uri \w+:(\/?\/?)[^\s]+)
-
-("Define the primitive types:")
-    ('Ed25519Key hex{128})
-    ('RsaKey4096 hex{1024})
-    ('Key Ed25519Key|RsaKey4096)
-    ('KeyRef uri)
-    
-    ("Ed25519Sigs are 128 bytes in length.")
-    ('Ed25519Sig hex{128})
-    
-    ("PKCS#1 says the sigs are the same size as the modulus")
-    ('RsaSig4096 hex{1024})
-
-("Define the two different types of signatures:")
-    ('Ed25519Signature
-        (type Ed25519Signature2019)
-        (key Ed25519Key)
-        (sig Ed25519Sig)
-    )
-    ('RsaSignature
-        (type RsaSignature2019)
-        (key RsaKey4096)
-        (sig RsaSig4096)
-    )
-```
-
-Note that there is no definition of a generic signature because we only want to allow onle Ed25519 digital signatures on our `SignedPerson`. Next let's define the `SignedPerson` assuming that the `Person` type is defined in the file `person.sdef` and the `Ed25519Signature` type is defined in the file `signature.sdef`:
-
-```
-(' person.sdef signature.sdef)
-
-('SignedPerson
-    (person Person)
-    (signature Ed25519Signature)
-)
-```
-
-Assuming the `SignedPerson` object is defined in the file named `signed_person.sdef`, an example use of `SignedPerson` looks like:
-
-```
-(' signed_person.sdef)
-
-(SignedPerson
-    (person
-        (emails
-            joe@schmoe.com
-            joe@foo.com
-        )
-        (phones
-            9119119111
-            8005551212
-        )
-    )
-    (signature
-        (type Ed25519Signature2019)
-        (key 454617014478c93a6b319dfc7f9353d9bcd46c5d031d2e2be3339170971a09c31a87a6fa65a9663c4192fe74ccb88a51bb1b2251d7041a858512f970bf1230d2)
-        (sig 1a87a6fa65a9663c4192fe74ccb88a51bb1b2251d7041a858512f970bf1230d2454617014478c93a6b319dfc7f9353d9bcd46c5d031d2e2be3339170971a09c3)
-    )
-)
-```
-
-The reason this is much easier for implementors is that they will receive a `SignedPerson` object with two fields--person and signature. To verify the digital signature, the implementor extracts the key and sig values from the signature, then grabs the Person object from the person field, canoncicalizes it and then passes all three to the signature verification routine.
-
-With inline signatures, implementors have to remove the signature field from the data object before canonicalizing and verifying the signature. Depending on the implementation this is not always trivial nor memory/cpu friendly. By wrapping a data object in a signature envelope type the operations are likely to be easier to implement however this format doesn't prescribe one way over the other. Inline signatures or enveloped signatures are both valid and it is up to the implentor to decide.
-
-One last example showing how a `SignedPerson` can be defined to contain a generic signature that can be either a `Ed25519Signature` or `RsaSignature4096`:
-
-```
-(' person.sdef signature.sdef)
-
-('SignedPerson
-    (person Person)
-    (signature Ed25519Signature|RsaSignature4096)
-)
-```
-
-This makes it possible to automatically parse a `SignedPerson` with either of the two signature types.
 
 ## Standard Types
 
-To further simplify and standardize the use of SDEF, a set of standard basic types shoudl be defined. Types such as hexidecimal strings, Base64/Base58/etc strings, URI strings, Email strings, etc are probably all worth defining so that others don't. The hope is that we can settle on some standard regular expressions for basic types that everybody uses to increase reuse and simplicity.
+To further simplify and standardize the use of SDEF, a set of standard basic types shoudl be defined. Types such as hexidecimal strings, Base64/Base58/etc strings, URI strings, Email strings, etc are probably all worth defining so that others don't have to. The hope is that we can settle on some standard regular expressions for basic types that everybody uses to increase reuse and simplicity.
 
 ```
 ('" (?:[^"]*)(?:\"))
@@ -365,3 +204,7 @@ To further simplify and standardize the use of SDEF, a set of standard basic typ
 ("Base64 encoded data")
     (?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?
 ```
+
+## Change Log
+v0.0.1, July 21, 2019 -- Initial version specifying a strict ordering, text based, self-describing data structure serialization format for data that is intended to be digitally signed.
+v0.0.2, July 7, 2020 -- Some small fixes with the addition of mentions to the Universal Cryptographic Construct encoding method for including binary cryptographic data.
